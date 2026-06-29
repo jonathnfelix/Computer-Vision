@@ -59,7 +59,7 @@ http://localhost:8501
 ## How to Use
 
 1. Launch the application.
-2. Upload a traffic video in MP4, AVI, MOV, or MKV format.
+2. Upload a traffic image or video 
 3. Adjust the detection parameters if necessary.
 4. Press the **Start** button to begin the simulation.
 5. The system will detect vehicles, count them for each lane, and update the traffic light duration automatically.

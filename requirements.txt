@@ -1,0 +1,186 @@
+"""
+image_sequence_to_video.py
+==========================
+Convert folder image sequence (misal: MTID dari Kaggle) ke MP4 video,
+supaya bisa di-upload ke Streamlit app.
+
+Dua cara pakai:
+
+  1) INTERACTIVE (paling gampang, tinggal jawab pertanyaan):
+       python image_sequence_to_video.py
+
+  2) COMMAND LINE (kalau mau cepat / batch):
+       python image_sequence_to_video.py <input_folder> <output.mp4> [--fps 30]
+
+     Contoh:
+       python image_sequence_to_video.py data/mtid/drone data/drone_video.mp4 --fps 30
+"""
+
+import argparse
+import re
+import sys
+from pathlib import Path
+
+import cv2
+
+
+# Format gambar yang didukung
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
+
+
+def natural_sort_key(filename: str):
+    """
+    Sort filename secara natural: img00002.jpg sebelum img00010.jpg.
+    Tanpa ini, sort default akan tempatkan img00010 sebelum img00002.
+    """
+    return [int(c) if c.isdigit() else c.lower()
+            for c in re.split(r"(\d+)", str(filename))]
+
+
+def collect_images(folder: Path) -> list:
+    """Kumpulkan semua file image di folder, sorted naturally."""
+    if not folder.is_dir():
+        raise ValueError(f"Folder tidak ditemukan: {folder}")
+
+    images = [
+        p for p in folder.iterdir()
+        if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+    ]
+    images.sort(key=lambda p: natural_sort_key(p.name))
+    return images
+
+
+def convert(input_folder: Path, output_path: Path, fps: int = 30) -> None:
+    """Convert folder image sequence ke MP4 video."""
+    images = collect_images(input_folder)
+    if not images:
+        raise ValueError(
+            f"Tidak ada file image (.jpg/.png/.bmp) di {input_folder}"
+        )
+
+    print(f"\n📂 Folder input  : {input_folder}")
+    print(f"📊 Total images  : {len(images)}")
+    print(f"🔢 Order pertama : {images[0].name}")
+    print(f"🔢 Order terakhir: {images[-1].name}")
+
+    # Baca image pertama untuk dapat dimensi
+    first = cv2.imread(str(images[0]))
+    if first is None:
+        raise ValueError(f"Gagal baca image pertama: {images[0]}")
+    h, w = first.shape[:2]
+    print(f"📐 Resolusi      : {w} x {h}")
+    print(f"🎬 Output        : {output_path}")
+    print(f"⚡ FPS           : {fps}")
+    print(f"⏱  Estimasi durasi: ~{len(images) / fps:.1f} detik\n")
+
+    # Pastikan folder output ada
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Setup VideoWriter dengan codec mp4v
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(str(output_path), fourcc, fps, (w, h))
+    if not writer.isOpened():
+        raise RuntimeError(
+            "Gagal buka VideoWriter. Coba install: pip install opencv-python"
+        )
+
+    # Tulis tiap frame
+    skipped = 0
+    for i, img_path in enumerate(images):
+        frame = cv2.imread(str(img_path))
+        if frame is None:
+            print(f"  ⚠  Skip (gagal baca): {img_path.name}")
+            skipped += 1
+            continue
+        # Resize kalau dimensi beda dari yang pertama
+        if frame.shape[:2] != (h, w):
+            frame = cv2.resize(frame, (w, h))
+        writer.write(frame)
+
+        if (i + 1) % 200 == 0:
+            print(f"  Progress: {i + 1}/{len(images)} frames...")
+
+    writer.release()
+
+    successful = len(images) - skipped
+    print(f"\n✅ Selesai! {successful} frames ditulis ke video.")
+    if skipped > 0:
+        print(f"⚠  {skipped} frames di-skip karena gagal dibaca.")
+    print(f"📦 File output: {output_path.resolve()}")
+    print(f"\n👉 Sekarang upload file ini di Streamlit app via sidebar.")
+
+
+def interactive() -> None:
+    """Mode interaktif: tanya path lewat input(), no command-line skill needed."""
+    print("=" * 60)
+    print("🎞  IMAGE SEQUENCE → MP4 VIDEO CONVERTER")
+    print("=" * 60)
+    print("\nScript ini ngubah folder berisi banyak file image (.jpg/.png)")
+    print("jadi satu file video .mp4 yang bisa di-upload ke Streamlit app.\n")
+
+    # Input folder
+    while True:
+        raw = input("📂 Path folder berisi image sequence:\n   > ").strip()
+        # Bersihkan tanda kutip kalau user copy-paste dari Explorer
+        raw = raw.strip('"').strip("'")
+        if not raw:
+            print("   ❌ Path tidak boleh kosong. Coba lagi.")
+            continue
+        input_folder = Path(raw)
+        if input_folder.is_dir():
+            break
+        print(f"   ❌ Folder gak ada: {input_folder}. Coba lagi.")
+
+    # Output file
+    default_out = Path("data") / f"{input_folder.name}.mp4"
+    raw = input(
+        f"\n🎬 Output .mp4 path (Enter untuk default '{default_out}'):\n   > "
+    ).strip().strip('"').strip("'")
+    output_path = Path(raw) if raw else default_out
+
+    # FPS
+    raw = input("\n⚡ FPS (Enter untuk default 30): ").strip()
+    try:
+        fps = int(raw) if raw else 30
+    except ValueError:
+        print("   ⚠  Input bukan angka, pakai default 30.")
+        fps = 30
+
+    # Jalankan konversi
+    convert(input_folder, output_path, fps=fps)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Convert folder image sequence ke MP4 video."
+    )
+    parser.add_argument(
+        "input_folder", nargs="?",
+        help="Folder berisi file .jpg/.png (omit untuk interactive mode)."
+    )
+    parser.add_argument(
+        "output", nargs="?",
+        help="Output .mp4 file path."
+    )
+    parser.add_argument(
+        "--fps", type=int, default=30,
+        help="Frames per second (default 30)."
+    )
+    args = parser.parse_args()
+
+    try:
+        if args.input_folder is None or args.output is None:
+            # Interactive mode
+            interactive()
+        else:
+            convert(Path(args.input_folder), Path(args.output), fps=args.fps)
+    except KeyboardInterrupt:
+        print("\n\n⛔ Dibatalkan oleh user.")
+        sys.exit(130)
+    except Exception as e:
+        print(f"\n❌ Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

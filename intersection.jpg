@@ -1,0 +1,96 @@
+"""
+Konfigurasi default untuk Smart Adaptive Traffic Light System.
+Parameter di sini bisa di-override via Streamlit sidebar saat runtime.
+"""
+
+# BACKGROUND SUBTRACTION (MOG2) — untuk Video Mode
+BG_HISTORY = 500
+BG_THRESHOLD = 16
+BG_DETECT_SHADOWS = True
+
+# MORPHOLOGICAL CLEANUP
+MORPH_KERNEL_SIZE = 5
+MORPH_OPEN_ITER = 2
+MORPH_CLOSE_ITER = 2
+
+# CONTOUR FILTERING (filter by area, pixel)
+MIN_CONTOUR_AREA = 500
+MAX_CONTOUR_AREA = 50000
+
+# ADAPTIVE TRAFFIC LIGHT TIMING (detik)
+MIN_GREEN_TIME = 8
+MAX_GREEN_TIME = 45
+BASE_GREEN_TIME = 15
+YELLOW_TIME = 3
+ALL_RED_TIME = 2
+
+COUNT_UPDATE_INTERVAL = 15
+
+# TARGET FRAME SIZE & PLAYBACK
+TARGET_FRAME_WIDTH = 960
+TARGET_FRAME_HEIGHT = 540
+PLAYBACK_DELAY = 0.03  # ~30 FPS
+
+# ROI PRESETS — pilih sesuai layout intersection di video/gambar
+# Setiap ROI = polygon (list of (x, y) tuples).
+# Asumsi: frame sudah di-resize ke 960x540.
+
+# ----- Preset 1: Generic 4-way intersection (centered) -----
+# Cocok untuk foto/video intersection 4-jalur dengan layout simetris,
+# misal screenshot Google Maps Satellite atau drone view sederhana.
+ROIS_GENERIC_4WAY = {
+    "North": [(380, 0),   (620, 0),   (620, 200), (380, 200)],
+    "South": [(380, 340), (620, 340), (620, 540), (380, 540)],
+    "East":  [(620, 180), (960, 180), (960, 360), (620, 360)],
+    "West":  [(0, 180),   (380, 180), (380, 360), (0, 360)],
+}
+
+# ----- Preset 2: MTID Drone View -----
+# Tuned khusus untuk Multi-view Traffic Intersection Dataset (drone view).
+# ROI di sini berbentuk POLYGON (bukan rectangle) supaya bisa ngikuti bentuk
+# lane yang sebenarnya — mengikuti gambar reference dari user.
+# Setiap ROI adalah list of (x, y) tuples membentuk polygon tertutup.
+ROIS_MTID_DRONE = {
+    # WEST approach: top-left, mengikuti area antrian bus+truk+mobil
+    "West": [
+        (0, 0),      
+        (140, 0),    
+        (365, 110),   
+        (190, 195),   
+        (0, 85),  
+
+    ],
+
+    # NORTH approach: top-right, mengikuti jalan menuju bundaran kecil
+    "North": [
+        (570, 53),    
+        (917, 53),    
+        (931, 54),            
+        (634, 125),
+        (581, 92),  
+    ],
+
+    # EAST approach: kanan, mengikuti lane dengan SUV + sedan + mobil merah
+    "East": [
+        (750, 191),   
+        (957, 200),   
+        (957, 425),   
+        (759, 350),   
+        (670, 285),   
+    ],
+
+    # SOUTH approach: bawah-kiri, mengikuti jalan menanjak masuk intersection
+    "South": [
+        (255, 310),    
+        (402, 400),    
+        (290, 540),    
+        (15, 540),     
+    ],
+}
+
+DEFAULT_ROIS = ROIS_MTID_DRONE
+
+ROI_PRESETS = {
+    "MTID Drone View": ROIS_MTID_DRONE,
+    "Generic 4-way intersection": ROIS_GENERIC_4WAY,
+}
